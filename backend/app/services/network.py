@@ -818,20 +818,18 @@ class NetworkService:
         domains = [b.domain for b in blocked]
         
         hosts_path = "/etc/hosts"
-        dev_hosts_path = "/tmp/fcc_hosts"
+        temp_path = "/tmp/fcc_hosts"
         
-        target_path = hosts_path
-        if not os.access(hosts_path, os.W_OK):
-            target_path = dev_hosts_path
-            
+        # Always read the base content from the system hosts file
         content = ""
-        if os.path.exists(target_path):
+        if os.path.exists(hosts_path):
             try:
-                with open(target_path, "r") as f:
+                with open(hosts_path, "r") as f:
                     content = f.read()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to read {hosts_path}: {str(e)}")
                 
+        # Parse and remove old FCC blocks
         lines = content.splitlines()
         new_lines = []
         in_fcc_block = False
@@ -845,6 +843,7 @@ class NetworkService:
             if not in_fcc_block:
                 new_lines.append(line)
                 
+        # Append new domain blocks
         if domains:
             new_lines.append("# FCC BLOCKS START")
             for d in domains:
@@ -852,12 +851,43 @@ class NetworkService:
                 new_lines.append(f"0.0.0.0 www.{d}")
             new_lines.append("# FCC BLOCKS END")
             
+        hosts_content = "\n".join(new_lines) + "\n"
+        
+        # 1. Write first to a temporary file
         try:
-            with open(target_path, "w") as f:
-                f.write("\n".join(new_lines) + "\n")
-            logger.info(f"Synchronized {len(domains)} blocked domains to {target_path}")
+            with open(temp_path, "w") as f:
+                f.write(hosts_content)
         except Exception as e:
-            logger.error(f"Failed to write blocked domains to {target_path}: {str(e)}")
+            logger.error(f"Failed to write temporary hosts file to {temp_path}: {str(e)}")
+            return
+            
+        # 2. Try writing directly to /etc/hosts
+        try:
+            with open(hosts_path, "w") as f:
+                f.write(hosts_content)
+            logger.info(f"Successfully wrote blocked domains directly to {hosts_path}")
+        except PermissionError:
+            # 3. Fallback: Copy via sudo cp
+            if not force_mock_active():
+                logger.info("Direct write to /etc/hosts denied. Attempting copy via sudo cp...")
+                code, stdout, stderr = run_system_command(["sudo", "cp", temp_path, hosts_path])
+                if code == 0:
+                    logger.info("Successfully updated /etc/hosts via sudo cp")
+                else:
+                    logger.error(f"Failed to update /etc/hosts via sudo cp (code={code}): {stderr or stdout}")
+            else:
+                logger.info("[Mock Mode] Skipped /etc/hosts copy via sudo cp")
+        except Exception as e:
+            logger.error(f"Error updating /etc/hosts: {str(e)}")
+            
+        # 4. Flush local DNS cache so the changes apply immediately
+        if not force_mock_active():
+            if is_command_available("resolvectl"):
+                run_system_command(["sudo", "resolvectl", "flush-caches"])
+                logger.info("Flushed systemd-resolved DNS cache via resolvectl")
+            elif is_command_available("systemd-resolve"):
+                run_system_command(["sudo", "systemd-resolve", "--flush-caches"])
+                logger.info("Flushed systemd-resolved DNS cache via systemd-resolve")
 
     @classmethod
     def block_domain(cls, db: Session, domain: str, reason: Optional[str] = None) -> bool:
