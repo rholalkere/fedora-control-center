@@ -18,12 +18,12 @@ sudo dnf install -y python3.13 python3-pip python3-devel nodejs npm systemd-deve
 1. Fork the repository on GitHub.
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/your-username/control-centre.git
-   cd control-centre
+   git clone git@github.com:your-username/fedora-control-center.git
+   cd fedora-control-center
    ```
 3. Set the upstream remote:
    ```bash
-   git remote add upstream https://github.com/original-owner/control-centre.git
+   git remote add upstream git@github.com:rholalkere/fedora-control-center.git
    ```
 
 ---
