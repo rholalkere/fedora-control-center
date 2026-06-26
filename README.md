@@ -30,7 +30,7 @@ graph TD
         end
     end
 
-    subgraph Linux OS [Host Machine Kernel & CLI]
+    subgraph linux_os ["Host Machine Kernel & CLI"]
         sysctl[systemctl]
         journalctl[journalctl]
         dnf[dnf / rpm]
@@ -47,7 +47,7 @@ graph TD
     API --> Services
     WS_Server --> Services
     Services --> DB
-    Services --> Linux OS
+    Services --> linux_os
 ```
 
 ## Features
