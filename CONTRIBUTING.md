@@ -115,7 +115,7 @@ To maintain a clean codebase, we enforce strict linting and styling configuratio
 4. Open a Pull Request from your branch to `main` on the original repository.
 5. In your PR description, explain:
    - What changes were made and why.
-   - Any new API endpoints added (ensure [API.md](file:///home/rahulholalkere/Documents/gemini-workspace/control-centre-rahulholalkere/API.md) is updated).
+   - Any new API endpoints added (ensure [API.md](API.md) is updated).
    - Verification steps showing how you tested the code.
 
 ---

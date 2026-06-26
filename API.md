@@ -195,3 +195,105 @@ Runs prompts on a model.
     "prompt": "How do I check systemctl failed units?"
   }
   ```
+
+---
+
+## 10. Network Management Endpoints
+
+### GET `/api/v1/network/interfaces`
+Retrieves a list of all active network interfaces and their configuration.
+
+### GET `/api/v1/network/devices`
+Scans neighboring devices connected to local networks.
+
+### GET `/api/v1/network/sockets`
+Retrieves a list of active network sockets (`tcp` / `udp` states).
+
+### GET `/api/v1/network/routes`
+Retrieves host routing table details.
+
+### GET `/api/v1/network/wifi`
+Scans and lists nearby Wi-Fi network SSIDs.
+
+### POST `/api/v1/network/devices/block`
+Blocks a device's network access using Firewalld MAC drop rules. Admin only.
+- **Body Schema**:
+  ```json
+  {
+    "mac": "00:11:22:33:44:55",
+    "ip": "192.168.1.100",
+    "hostname": "unauthorized-device",
+    "reason": "Intruder"
+  }
+  ```
+
+### POST `/api/v1/network/devices/unblock`
+Unblocks a device's network access. Admin only.
+- **Body Schema**:
+  ```json
+  {
+    "mac": "00:11:22:33:44:55"
+  }
+  ```
+
+### GET `/api/v1/network/devices/blocked`
+Lists all currently blocked MAC addresses.
+
+### GET `/api/v1/network/analytics/usage`
+Retrieves historical bandwidth logs.
+- **Query Parameters**:
+  - `range_days`: filter duration in days (default: `7`).
+
+### GET `/api/v1/network/analytics/access-logs`
+Lists paginated destination IP access logs.
+
+### GET `/api/v1/network/dns-blocklist`
+Lists all system-wide blocked domains.
+
+### POST `/api/v1/network/dns-blocklist/block`
+Blocks a domain system-wide. Admin only.
+- **Body Schema**:
+  ```json
+  {
+    "domain": "facebook.com",
+    "reason": "Prevent distractions"
+  }
+  ```
+
+### POST `/api/v1/network/dns-blocklist/unblock`
+Allows a domain system-wide. Admin only.
+- **Body Schema**:
+  ```json
+  {
+    "domain": "facebook.com"
+  }
+  ```
+
+---
+
+## 11. Performance & Process Control Endpoints
+
+### GET `/api/v1/system/processes`
+Lists all running processes on the host sorted by CPU/RAM usage.
+
+### POST `/api/v1/system/processes/kill`
+Terminates a process by PID. Admin only.
+- **Body Schema**:
+  ```json
+  {
+    "pid": 1234
+  }
+  ```
+
+### GET `/api/v1/system/power-profile`
+Retrieves the active performance profile from `power-profiles-daemon`.
+
+### POST `/api/v1/system/power-profile`
+Switches the active system power profile. Admin only.
+- **Body Schema**:
+  ```json
+  {
+    "profile": "performance" // performance, balanced, power-saver
+  }
+  ```
+
