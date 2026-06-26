@@ -4,7 +4,7 @@ import time
 import psutil
 import cpuinfo
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 from app.schemas.system import SystemMetrics, HostInfo, CpuMetrics, MemoryMetrics, DiskMetrics, NetworkInterfaceMetrics, GpuMetrics, BatteryMetrics
 from app.services.utils import run_system_command
 

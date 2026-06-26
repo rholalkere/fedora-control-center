@@ -1,6 +1,6 @@
 import subprocess
 import logging
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 logger = logging.getLogger("fedora_control_center")
 
