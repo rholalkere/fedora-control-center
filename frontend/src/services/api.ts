@@ -266,12 +266,55 @@ export const api = {
     return apiFetch(`/network/analytics/usage?range_days=${rangeDays}`);
   },
   
-  getNetworkAccessLogs: async (skip = 0, limit = 50, sourceIp?: string, search?: string): Promise<any[]> => {
-    const params = new URLSearchParams();
-    params.append('skip', skip.toString());
-    params.append('limit', limit.toString());
-    if (sourceIp) params.append('source_ip', sourceIp);
-    if (search) params.append('search', search);
-    return apiFetch(`/network/analytics/access-logs?${params.toString()}`);
-  }
-};
+    getNetworkAccessLogs: async (skip = 0, limit = 50, sourceIp?: string, search?: string): Promise<any[]> => {
+      const params = new URLSearchParams();
+      params.append('skip', skip.toString());
+      params.append('limit', limit.toString());
+      if (sourceIp) params.append('source_ip', sourceIp);
+      if (search) params.append('search', search);
+      return apiFetch(`/network/analytics/access-logs?${params.toString()}`);
+    },
+
+    // Power Profiles & Processes
+    getPowerProfile: async (): Promise<any> => {
+      return apiFetch('/system/power-profile');
+    },
+
+    setPowerProfile: async (profile: string): Promise<any> => {
+      return apiFetch('/system/power-profile', {
+        method: 'POST',
+        body: JSON.stringify({ profile }),
+      });
+    },
+
+    getProcesses: async (): Promise<any[]> => {
+      return apiFetch('/system/processes');
+    },
+
+    killProcess: async (pid: number): Promise<any> => {
+      return apiFetch('/system/processes/kill', {
+        method: 'POST',
+        body: JSON.stringify({ pid }),
+      });
+    },
+
+    // DNS Blocklist
+    getBlockedDomains: async (): Promise<any[]> => {
+      return apiFetch('/network/dns-blocklist');
+    },
+
+    blockDomain: async (domain: string, reason?: string): Promise<any> => {
+      return apiFetch('/network/dns-blocklist/block', {
+        method: 'POST',
+        body: JSON.stringify({ domain, reason }),
+      });
+    },
+
+    unblockDomain: async (domain: string): Promise<any> => {
+      return apiFetch('/network/dns-blocklist/unblock', {
+        method: 'POST',
+        body: JSON.stringify({ domain }),
+      });
+    }
+  };
+

@@ -35,3 +35,12 @@ class NetworkAccessLog(Base):
     bytes_sent = Column(BigInteger, default=0)
     bytes_recv = Column(BigInteger, default=0)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class NetworkBlockedDomain(Base):
+    __tablename__ = "network_blocked_domains"
+
+    domain = Column(String, primary_key=True, index=True)
+    blocked_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    reason = Column(String, nullable=True)
+

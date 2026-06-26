@@ -23,7 +23,8 @@ MOCK_LOG_ENTRIES = [
 class JournalService:
     @classmethod
     def is_journalctl_available(cls) -> bool:
-        return is_command_available("journalctl")
+        from app.services.utils import force_mock_active
+        return is_command_available("journalctl") and not force_mock_active()
 
     @classmethod
     def get_logs(cls, filters: JournalFilter) -> LogResponse:

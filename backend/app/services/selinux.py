@@ -63,6 +63,9 @@ MOCK_DENIALS = [
 class SELinuxService:
     @classmethod
     def is_selinux_available(cls) -> bool:
+        from app.services.utils import force_mock_active
+        if force_mock_active():
+            return False
         # Check if sestatus CLI exists or selinuxfs is mounted
         return is_command_available("sestatus") or os.path.exists("/sys/fs/selinux")
 

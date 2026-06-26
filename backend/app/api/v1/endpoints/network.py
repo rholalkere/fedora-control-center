@@ -13,7 +13,10 @@ from app.schemas.network import (
     UnblockDeviceRequest,
     BlockedDeviceResponse,
     NetworkUsageAnalytics,
-    AccessLogResponse
+    AccessLogResponse,
+    BlockDomainRequest,
+    UnblockDomainRequest,
+    BlockedDomainResponse
 )
 from app.services.network import NetworkService
 from app.repositories.audit_log import AuditLogRepository
@@ -120,3 +123,51 @@ def get_access_logs(
     db: Session = Depends(deps.get_db)
 ):
     return NetworkService.get_access_logs(db, skip, limit, source_ip, search)
+
+
+# --- Domain Blocklist / Content Filter ---
+
+@router.get("/dns-blocklist", response_model=List[BlockedDomainResponse], dependencies=[Depends(deps.get_current_user)])
+def get_blocked_domains(db: Session = Depends(deps.get_db)):
+    return NetworkService.get_blocked_domains(db)
+
+@router.post("/dns-blocklist/block", dependencies=[Depends(deps.get_admin_user)])
+def block_domain(
+    request: Request,
+    body: BlockDomainRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_admin_user)
+):
+    client_ip = request.client.host if request.client else "unknown"
+    AuditLogRepository.create(
+        db=db,
+        username=current_user.username,
+        action="network_block_domain",
+        ip_address=client_ip,
+        details=f"Blocked domain: {body.domain}, Reason: {body.reason}"
+    )
+    success = NetworkService.block_domain(db=db, domain=body.domain, reason=body.reason)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to block domain.")
+    return {"status": "success", "message": f"Domain {body.domain} blocked successfully."}
+
+@router.post("/dns-blocklist/unblock", dependencies=[Depends(deps.get_admin_user)])
+def unblock_domain(
+    request: Request,
+    body: UnblockDomainRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_admin_user)
+):
+    client_ip = request.client.host if request.client else "unknown"
+    AuditLogRepository.create(
+        db=db,
+        username=current_user.username,
+        action="network_unblock_domain",
+        ip_address=client_ip,
+        details=f"Unblocked domain: {body.domain}"
+    )
+    success = NetworkService.unblock_domain(db=db, domain=body.domain)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to unblock domain.")
+    return {"status": "success", "message": f"Domain {body.domain} unblocked successfully."}
+

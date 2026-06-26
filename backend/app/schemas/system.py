@@ -69,3 +69,25 @@ class SystemMetrics(BaseModel):
     network: Dict[str, NetworkInterfaceMetrics]
     gpu: List[GpuMetrics]
     battery: Optional[BatteryMetrics] = None
+
+
+class ProcessInfo(BaseModel):
+    pid: int
+    name: str
+    username: str
+    status: str
+    cpu_percent: float
+    memory_percent: float
+    cmdline: str
+
+class KillProcessRequest(BaseModel):
+    pid: int
+
+class PowerProfileInfo(BaseModel):
+    active_profile: str
+    profiles: List[str]
+    driver: str
+
+class SetPowerProfileRequest(BaseModel):
+    profile: str
+

@@ -3,13 +3,14 @@ import json
 import jwt
 import os
 import logging
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Query, Request
+from typing import List
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Query, Request, HTTPException
 from sqlalchemy.orm import Session
 from app.core import deps
 from app.core.config import settings
 from app.core.security import ALGORITHM
 from app.core.websocket import manager
-from app.schemas.system import SystemMetrics
+from app.schemas.system import SystemMetrics, ProcessInfo, KillProcessRequest, PowerProfileInfo, SetPowerProfileRequest
 from app.services.system import SystemService
 from app.repositories.user import UserRepository
 from app.repositories.audit_log import AuditLogRepository
@@ -108,3 +109,56 @@ def system_shutdown(
     except Exception as e:
         logger.error(f"Failed to issue shutdown command: {str(e)}")
         return {"status": "success", "message": "Shutdown command triggered (Mock/Dev Mode)."}
+
+# --- Performance: Process Monitoring & Control ---
+
+@router.get("/processes", response_model=List[ProcessInfo], dependencies=[Depends(deps.get_current_user)])
+def get_processes():
+    return SystemService.get_processes()
+
+@router.post("/processes/kill", dependencies=[Depends(deps.get_admin_user)])
+def kill_process(
+    request: Request,
+    body: KillProcessRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_admin_user)
+):
+    client_ip = request.client.host if request.client else "unknown"
+    AuditLogRepository.create(
+        db=db,
+        username=current_user.username,
+        action="system_kill_process",
+        ip_address=client_ip,
+        details=f"Killed process PID: {body.pid}"
+    )
+    success = SystemService.kill_process(body.pid)
+    if not success:
+        raise HTTPException(status_code=404, detail="Process not found or access denied.")
+    return {"status": "success", "message": f"Process {body.pid} terminated."}
+
+# --- Performance: Power Profiles Management ---
+
+@router.get("/power-profile", response_model=PowerProfileInfo, dependencies=[Depends(deps.get_current_user)])
+def get_power_profile():
+    return SystemService.get_power_profile()
+
+@router.post("/power-profile", dependencies=[Depends(deps.get_admin_user)])
+def set_power_profile(
+    request: Request,
+    body: SetPowerProfileRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_admin_user)
+):
+    client_ip = request.client.host if request.client else "unknown"
+    AuditLogRepository.create(
+        db=db,
+        username=current_user.username,
+        action="system_set_power_profile",
+        ip_address=client_ip,
+        details=f"Set system power profile to: {body.profile}"
+    )
+    success = SystemService.set_power_profile(body.profile)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to switch power profile.")
+    return {"status": "success", "message": f"Power profile set to {body.profile}."}
+

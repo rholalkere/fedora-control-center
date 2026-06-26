@@ -33,7 +33,8 @@ MOCK_ZONES: Dict[str, dict] = {
 class FirewallService:
     @classmethod
     def is_firewalld_available(cls) -> bool:
-        return is_command_available("firewall-cmd")
+        from app.services.utils import force_mock_active
+        return is_command_available("firewall-cmd") and not force_mock_active()
 
     @classmethod
     def get_zones(cls) -> List[FirewallZoneInfo]:

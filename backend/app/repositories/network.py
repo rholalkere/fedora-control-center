@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from app.models.network import NetworkBlockedDevice, NetworkUsageHistory, NetworkAccessLog
+from app.models.network import NetworkBlockedDevice, NetworkUsageHistory, NetworkAccessLog, NetworkBlockedDomain
 
 class NetworkRepository:
     # --- Blocked Devices ---
@@ -191,3 +191,41 @@ class NetworkRepository:
         deleted = db.query(NetworkAccessLog).filter(NetworkAccessLog.timestamp < cutoff).delete()
         db.commit()
         return deleted
+
+    # --- Blocked Domains (Parental / Content Control) ---
+    @staticmethod
+    def block_domain(db: Session, domain: str, reason: Optional[str] = None) -> NetworkBlockedDomain:
+        domain_lower = domain.lower().strip()
+        db_blocked = db.query(NetworkBlockedDomain).filter(NetworkBlockedDomain.domain == domain_lower).first()
+        if not db_blocked:
+            db_blocked = NetworkBlockedDomain(
+                domain=domain_lower,
+                reason=reason
+            )
+            db.add(db_blocked)
+        else:
+            db_blocked.reason = reason
+            db_blocked.blocked_at = datetime.now(timezone.utc)
+            
+        db.commit()
+        db.refresh(db_blocked)
+        return db_blocked
+
+    @staticmethod
+    def unblock_domain(db: Session, domain: str) -> bool:
+        domain_lower = domain.lower().strip()
+        db_blocked = db.query(NetworkBlockedDomain).filter(NetworkBlockedDomain.domain == domain_lower).first()
+        if db_blocked:
+            db.delete(db_blocked)
+            db.commit()
+            return True
+        return False
+
+    @staticmethod
+    def get_blocked_domains(db: Session) -> List[NetworkBlockedDomain]:
+        return db.query(NetworkBlockedDomain).all()
+
+    @staticmethod
+    def is_domain_blocked(db: Session, domain: str) -> bool:
+        domain_lower = domain.lower().strip()
+        return db.query(NetworkBlockedDomain).filter(NetworkBlockedDomain.domain == domain_lower).count() > 0

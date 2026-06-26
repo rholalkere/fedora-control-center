@@ -809,3 +809,73 @@ class NetworkService:
             WifiNetwork(ssid="Airtel_jaga_2653", bssid="44:63:c2:1e:0b:ee", channel=8, rate="270 Mbit/s", signal=64, bars="▂▄▆_", security="WPA1 WPA2"),
             WifiNetwork(ssid="CoffeeShop_Guest", bssid="3c:64:cf:fd:d2:2d", channel=1, rate="130 Mbit/s", signal=45, bars="▂▄__", security="Open")
         ]
+
+    @classmethod
+    def _sync_blocked_domains_hosts_file(cls, db: Session):
+        import os
+        from app.repositories.network import NetworkRepository
+        blocked = NetworkRepository.get_blocked_domains(db)
+        domains = [b.domain for b in blocked]
+        
+        hosts_path = "/etc/hosts"
+        dev_hosts_path = "/tmp/fcc_hosts"
+        
+        target_path = hosts_path
+        if not os.access(hosts_path, os.W_OK):
+            target_path = dev_hosts_path
+            
+        content = ""
+        if os.path.exists(target_path):
+            try:
+                with open(target_path, "r") as f:
+                    content = f.read()
+            except Exception:
+                pass
+                
+        lines = content.splitlines()
+        new_lines = []
+        in_fcc_block = False
+        for line in lines:
+            if line.strip() == "# FCC BLOCKS START":
+                in_fcc_block = True
+                continue
+            if line.strip() == "# FCC BLOCKS END":
+                in_fcc_block = False
+                continue
+            if not in_fcc_block:
+                new_lines.append(line)
+                
+        if domains:
+            new_lines.append("# FCC BLOCKS START")
+            for d in domains:
+                new_lines.append(f"0.0.0.0 {d}")
+                new_lines.append(f"0.0.0.0 www.{d}")
+            new_lines.append("# FCC BLOCKS END")
+            
+        try:
+            with open(target_path, "w") as f:
+                f.write("\n".join(new_lines) + "\n")
+            logger.info(f"Synchronized {len(domains)} blocked domains to {target_path}")
+        except Exception as e:
+            logger.error(f"Failed to write blocked domains to {target_path}: {str(e)}")
+
+    @classmethod
+    def block_domain(cls, db: Session, domain: str, reason: Optional[str] = None) -> bool:
+        from app.repositories.network import NetworkRepository
+        NetworkRepository.block_domain(db, domain=domain, reason=reason)
+        cls._sync_blocked_domains_hosts_file(db)
+        return True
+
+    @classmethod
+    def unblock_domain(cls, db: Session, domain: str) -> bool:
+        from app.repositories.network import NetworkRepository
+        success = NetworkRepository.unblock_domain(db, domain)
+        if success:
+            cls._sync_blocked_domains_hosts_file(db)
+        return success
+
+    @classmethod
+    def get_blocked_domains(cls, db: Session) -> List[any]:
+        from app.repositories.network import NetworkRepository
+        return NetworkRepository.get_blocked_domains(db)
+

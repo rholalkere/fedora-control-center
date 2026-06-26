@@ -110,3 +110,20 @@ class AccessLogResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class BlockDomainRequest(BaseModel):
+    domain: str
+    reason: Optional[str] = None
+
+class UnblockDomainRequest(BaseModel):
+    domain: str
+
+class BlockedDomainResponse(BaseModel):
+    domain: str
+    blocked_at: datetime
+    reason: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+

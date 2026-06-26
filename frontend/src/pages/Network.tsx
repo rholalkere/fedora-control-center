@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-type TabType = 'interfaces' | 'devices' | 'analytics' | 'logs' | 'sockets' | 'routes' | 'wifi';
+type TabType = 'interfaces' | 'devices' | 'analytics' | 'logs' | 'sockets' | 'routes' | 'wifi' | 'dnsBlocklist';
 
 export function Network() {
   const [activeTab, setActiveTab] = useState<TabType>('interfaces');
@@ -38,6 +38,11 @@ export function Network() {
   // Block Dialog state
   const [blockingDevice, setBlockingDevice] = useState<any | null>(null);
   const [blockReason, setBlockReason] = useState('');
+
+  // Domain Block List states
+  const [blockingDomain, setBlockingDomain] = useState(false);
+  const [newDomain, setNewDomain] = useState('');
+  const [domainReason, setDomainReason] = useState('');
 
   const queryClient = useQueryClient();
   const { addToast } = useNotificationStore();
@@ -91,6 +96,12 @@ export function Network() {
     queryFn: api.getWifiNetworks
   });
 
+  const { data: blockedDomains = [], isLoading: loadingDomains, refetch: refetchDomains } = useQuery({
+    queryKey: ['network', 'dns-blocklist'],
+    queryFn: api.getBlockedDomains,
+    enabled: activeTab === 'dnsBlocklist'
+  });
+
   // --- Mutations ---
 
   const blockMutation = useMutation({
@@ -120,6 +131,32 @@ export function Network() {
     }
   });
 
+  const blockDomainMutation = useMutation({
+    mutationFn: (variables: { domain: string; reason?: string }) => 
+      api.blockDomain(variables.domain, variables.reason),
+    onSuccess: (data) => {
+      addToast(data.message || 'Domain blocked successfully.', 'success');
+      queryClient.invalidateQueries({ queryKey: ['network', 'dns-blocklist'] });
+      setBlockingDomain(false);
+      setNewDomain('');
+      setDomainReason('');
+    },
+    onError: (err: any) => {
+      addToast(`Block failed: ${err.message}`, 'error');
+    }
+  });
+
+  const unblockDomainMutation = useMutation({
+    mutationFn: (domain: string) => api.unblockDomain(domain),
+    onSuccess: (data) => {
+      addToast(data.message || 'Domain unblocked successfully.', 'success');
+      queryClient.invalidateQueries({ queryKey: ['network', 'dns-blocklist'] });
+    },
+    onError: (err: any) => {
+      addToast(`Unblock failed: ${err.message}`, 'error');
+    }
+  });
+
   // --- Helpers ---
 
   const handleRefresh = () => {
@@ -130,6 +167,7 @@ export function Network() {
     else if (activeTab === 'sockets') refetchSockets();
     else if (activeTab === 'routes') refetchRoutes();
     else if (activeTab === 'wifi') refetchWifi();
+    else if (activeTab === 'dnsBlocklist') refetchDomains();
   };
 
   const getFormatBytes = (bytes: number) => {
@@ -323,6 +361,12 @@ export function Network() {
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${activeTab === 'wifi' ? 'bg-fedora-blue text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}
           >
             <Wifi size={13} /> Wi-Fi Scan
+          </button>
+          <button
+            onClick={() => { setActiveTab('dnsBlocklist'); setSearchQuery(''); }}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${activeTab === 'dnsBlocklist' ? 'bg-fedora-blue text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}
+          >
+            <Shield size={13} /> Content Filter
           </button>
         </div>
 
@@ -812,6 +856,78 @@ export function Network() {
             </div>
           )}
 
+          {activeTab === 'dnsBlocklist' && (
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-5">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Shield className="text-fedora-blue" size={18} /> Parental & Content Control
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Null-route domains system-wide by appending DNS overrides to the local hosts engine.
+                  </p>
+                </div>
+                {isAdmin && (
+                  <button
+                    onClick={() => setBlockingDomain(true)}
+                    className="flex items-center gap-2 bg-fedora-blue hover:bg-fedora-blue/90 text-white font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded-lg shadow-md hover:shadow-fedora-blue/20 transition-all"
+                  >
+                    <Ban size={14} /> Block Domain
+                  </button>
+                )}
+              </div>
+
+              {loadingDomains ? (
+                <div className="flex items-center justify-center py-20">
+                  <RefreshCw className="animate-spin text-slate-500" size={24} />
+                </div>
+              ) : blockedDomains.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-500 border border-dashed border-slate-800 rounded-xl bg-slate-950/20">
+                  <Shield size={36} className="text-slate-700 mb-2" />
+                  <p className="text-sm font-semibold">No Domains Blocked</p>
+                  <p className="text-xs text-slate-600 mt-1">Traffic is allowed to all web domains.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-slate-800 rounded-xl bg-slate-950/40">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider">
+                        <th className="p-4">Blocked Domain</th>
+                        <th className="p-4">Blocked Date & Time</th>
+                        <th className="p-4">Reason / Notes</th>
+                        {isAdmin && <th className="p-4 text-right">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                      {blockedDomains
+                        .filter((d: any) => d.domain.toLowerCase().includes(searchQuery.toLowerCase()))
+                        .map((item: any) => (
+                          <tr key={item.domain} className="hover:bg-slate-800/10 transition-colors">
+                            <td className="p-4 font-semibold text-white font-mono">{item.domain}</td>
+                            <td className="p-4 text-slate-400 font-mono">
+                              {new Date(item.blocked_at).toLocaleString()}
+                            </td>
+                            <td className="p-4 text-slate-400">{item.reason || 'None specified'}</td>
+                            {isAdmin && (
+                              <td className="p-4 text-right">
+                                <button
+                                  onClick={() => unblockDomainMutation.mutate(item.domain)}
+                                  disabled={unblockDomainMutation.isPending}
+                                  className="inline-flex items-center gap-1.5 bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                                >
+                                  <Unlock size={10} /> Allow Domain
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
         </CardContent>
       </Card>
 
@@ -860,6 +976,61 @@ export function Network() {
                 className="bg-red-600 hover:bg-red-700 disabled:bg-slate-800 text-white font-semibold text-xs px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
               >
                 {blockMutation.isPending ? 'Blocking...' : 'Confirm Block'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: BLOCK DOMAIN */}
+      {blockingDomain && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3 text-red-500 border-b border-slate-800 pb-3">
+              <Ban size={22} />
+              <div>
+                <h3 className="font-bold text-white text-base">Block Web Domain</h3>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">DNS Override Configuration</p>
+              </div>
+            </div>
+            
+            <div className="space-y-3 text-xs">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Domain Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. youtube.com, facebook.com..."
+                  value={newDomain}
+                  onChange={(e) => setNewDomain(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 text-sm text-slate-200 px-3 py-2 rounded-lg focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/40 transition-all placeholder:text-slate-700 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Reason</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Prevent distractions, security risk..."
+                  value={domainReason}
+                  onChange={(e) => setDomainReason(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 text-sm text-slate-200 px-3 py-2 rounded-lg focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/40 transition-all placeholder:text-slate-700"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => { setBlockingDomain(false); setNewDomain(''); setDomainReason(''); }}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs px-4 py-2 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => blockDomainMutation.mutate({ domain: newDomain, reason: domainReason })}
+                disabled={blockDomainMutation.isPending || !newDomain.trim()}
+                className="bg-red-600 hover:bg-red-700 disabled:bg-slate-800 text-white font-semibold text-xs px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                {blockDomainMutation.isPending ? 'Blocking...' : 'Block Domain'}
               </button>
             </div>
           </div>

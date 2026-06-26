@@ -3,9 +3,12 @@ import platform
 import time
 import psutil
 import cpuinfo
+import logging
 from typing import Dict, List, Optional
 from app.schemas.system import SystemMetrics, HostInfo, CpuMetrics, MemoryMetrics, DiskMetrics, NetworkInterfaceMetrics, GpuMetrics, BatteryMetrics
 from app.services.utils import run_system_command
+
+logger = logging.getLogger("fedora_control_center")
 
 class SystemService:
     _cached_cpu_info = None
@@ -334,3 +337,80 @@ class SystemService:
             gpu=cls.get_gpu_metrics(),
             battery=cls.get_battery_metrics()
         )
+
+    @classmethod
+    def get_processes(cls) -> List[Dict]:
+        processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'username', 'status', 'cpu_percent', 'memory_percent', 'cmdline']):
+            try:
+                info = proc.info
+                cmdline = " ".join(info['cmdline']) if info['cmdline'] else ""
+                status = info['status'] or "unknown"
+                processes.append({
+                    "pid": info['pid'],
+                    "name": info['name'],
+                    "username": info['username'] or "system",
+                    "status": status,
+                    "cpu_percent": round(info['cpu_percent'] or 0.0, 1),
+                    "memory_percent": round(info['memory_percent'] or 0.0, 1),
+                    "cmdline": cmdline
+                })
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+        
+        # Sort by cpu_percent desc, then memory_percent desc
+        processes.sort(key=lambda x: (x['cpu_percent'], x['memory_percent']), reverse=True)
+        return processes
+
+    @classmethod
+    def kill_process(cls, pid: int) -> bool:
+        try:
+            proc = psutil.Process(pid)
+            proc.terminate()
+            return True
+        except psutil.NoSuchProcess:
+            return False
+        except psutil.AccessDenied as e:
+            logger.error(f"Permission denied to kill PID {pid}: {str(e)}")
+            code, _, _ = run_system_command(["kill", "-15", str(pid)])
+            return code == 0
+
+    @classmethod
+    def get_power_profile(cls) -> Dict:
+        from app.services.utils import is_command_available, run_system_command, force_mock_active
+        
+        if not force_mock_active() and is_command_available("powerprofilesctl"):
+            code, stdout, _ = run_system_command(["powerprofilesctl", "get"])
+            if code == 0:
+                current = stdout.strip()
+            else:
+                current = "balanced"
+            available = ["performance", "balanced", "power-saver"]
+            return {
+                "active_profile": current,
+                "profiles": available,
+                "driver": "power-profiles-daemon"
+            }
+        else:
+            return {
+                "active_profile": "balanced",
+                "profiles": ["performance", "balanced", "power-saver"],
+                "driver": "mock-daemon"
+            }
+
+    @classmethod
+    def set_power_profile(cls, profile: str) -> bool:
+        from app.services.utils import is_command_available, run_system_command, force_mock_active
+        if profile not in ["performance", "balanced", "power-saver"]:
+            return False
+            
+        if not force_mock_active() and is_command_available("powerprofilesctl"):
+            code, _, stderr = run_system_command(["powerprofilesctl", "set", profile])
+            if code == 0:
+                return True
+            else:
+                logger.error(f"Failed to set power profile to {profile}: {stderr}")
+                return False
+        else:
+            logger.info(f"[Mock Mode] Switched power profile to {profile}")
+            return True

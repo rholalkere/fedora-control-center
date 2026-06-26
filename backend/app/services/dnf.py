@@ -32,7 +32,8 @@ MOCK_HISTORY = [
 class DnfService:
     @classmethod
     def is_dnf_available(cls) -> bool:
-        return is_command_available("dnf") and is_command_available("rpm")
+        from app.services.utils import force_mock_active
+        return is_command_available("dnf") and is_command_available("rpm") and not force_mock_active()
 
     @classmethod
     def list_installed_packages(cls) -> List[PackageInfo]:
